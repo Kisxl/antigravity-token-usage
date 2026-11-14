@@ -4,7 +4,7 @@ A native **Antigravity 2.0** Plugin + Sidecar that brings a **Codex-style local 
 
 [中文说明](#中文说明)
 
-![Antigravity Token Usage Dashboard](assets/preview.png)
+![Antigravity Token Usage Dashboard](assets/dashboard-preview.png)
 
 ---
 
