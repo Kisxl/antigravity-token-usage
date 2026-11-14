@@ -20,11 +20,11 @@ A native **Antigravity 2.0** Plugin + Sidecar that brings a **Codex-style local 
   - **Weekly**: 7-block vertical equalizer per week column.
   - **Cumulative**: Step-up cumulative growth matrix.
 - **Per-Model Breakdown**:
-  - See which model (Gemini / Claude / …) consumed how many tokens, all-time or for any selected day, with In / Cache / Out split. Read from each conversation's local `conversations/<id>.db` (read-only).
+  - Automatically groups tier variants (`High / Medium / Low`, etc.) into unified model families (Gemini / Claude / …), showing all-time or selected-day usage with In / Cache / Out split.
 - **All Time / Today Toggle & Bilingual UI (`中文 / EN`)**:
   - Switch between all-time totals and today's new usage, and toggle Chinese / English UI with `localStorage` persistence.
 - **100% Local & Read-Only**:
-  - Reads `~/.gemini/antigravity/brain/*/.system_generated/logs/transcript.jsonl` and `conversation_summaries.db` (read-only) with `(mtime, size)` + `etag` caching. Zero external network requests.
+  - Reads `conversations/*.db` (read-only, deduplicated across all `~/.gemini/antigravity*` directories, falling back to `transcript.jsonl` if absent) and `conversation_summaries.db` with `(mtime, size)` + `etag` caching. Zero external network requests.
 
 ## Installation & Usage
 
@@ -52,9 +52,9 @@ Then open **Plugins** in Antigravity (or restart Antigravity) to enable **Token 
 
 - **双原生入口**：支持左侧边栏 `Plugins` 独立全屏页（`SIDEBAR`）与对话右侧辅助面板（`AUX_PANE`）。
 - **核心指标与三视图矩阵**：顶部 5 项 KPI（累计 Token 数、单日峰值、最长任务用时、最长连续天数、当前连续天数）+ 53×7 点阵热力图（每天 / 每周 / 累计总量），点击任意日期可下钻当日会话并直接点击跳转对应对话。
-- **按模型统计**：区分每个模型（Gemini / Claude 等）的 Token 消耗，支持累计与所选日期两种范围，并显示 In / Cache / Out 拆分（只读读取本地 `conversations/<id>.db`）。
+- **按模型统计**：自动合并同一模型系列的不同档位（`High / Medium / Low` 等），支持累计与所选日期两种范围，并显示 In / Cache / Out 拆分。
 - **范围与语言切换**：支持 `总计 / 今日新增` 与 `中文 / EN` 实时切换。
-- **纯本地只读**：仅读取本机 `~/.gemini/antigravity/` 日志与 SQLite 摘要库，无任何外部网络请求。
+- **纯本地只读**：优先只读读取全部 `~/.gemini/antigravity*` 目录下的 `conversations/*.db`（按会话去重汇总，缺失时回退 `transcript.jsonl`）及摘要库，无任何外部网络请求。
 
 ### 安装与使用
 
