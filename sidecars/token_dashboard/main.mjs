@@ -9,7 +9,7 @@
 import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { basename, dirname, join } from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 import { SidecarApp, Response } from 'sidecar_sdk';
 
 let DatabaseSync = null;
@@ -135,6 +135,169 @@ function loadConversationMeta(appData) {
     try { db?.close(); } catch { /* ignore */ }
   }
   return map;
+}
+
+/**
+ * Minimal protobuf wire-format reader: returns [fieldNo, wireType, value] tuples.
+ * Varints are returned as Numbers, length-delimited fields as Uint8Array slices.
+ */
+function readVarint(buf, pos) {
+  let val = 0;
+  let mul = 1;
+  while (pos < buf.length) {
+    const b = buf[pos++];
+    val += (b & 0x7f) * mul;
+    if (!(b & 0x80)) return [val, pos];
+    mul *= 128;
+  }
+  throw new Error('truncated varint');
+}
+
+function pbFields(buf) {
+  const out = [];
+  let pos = 0;
+  while (pos < buf.length) {
+    let tag;
+    [tag, pos] = readVarint(buf, pos);
+    const fn = Math.floor(tag / 8);
+    const wt = tag & 7;
+    if (wt === 0) {
+      let v;
+      [v, pos] = readVarint(buf, pos);
+      out.push([fn, wt, v]);
+    } else if (wt === 2) {
+      let len;
+      [len, pos] = readVarint(buf, pos);
+      if (pos + len > buf.length) throw new Error('truncated field');
+      out.push([fn, wt, buf.subarray(pos, pos + len)]);
+      pos += len;
+    } else if (wt === 1) {
+      pos += 8;
+    } else if (wt === 5) {
+      pos += 4;
+    } else {
+      throw new Error(`unsupported wire type ${wt}`);
+    }
+  }
+  return out;
+}
+
+function pbGet(fields, fn, wt) {
+  for (const f of fields) if (f[0] === fn && f[1] === wt) return f[2];
+  return undefined;
+}
+
+const utf8 = new TextDecoder();
+const isDisplayName = (s) => /\(.+\)$/.test(s);
+
+/**
+ * Reads per-step model usage from <appData>/conversations/<convId>.db (read-only).
+ * steps.metadata (step_type 15 = model response): field 1 = timestamp,
+ * field 9 = usage { 1: modelId, 2: input, 3: output, 5: cacheRead }.
+ * gen_metadata maps modelId -> display name ("Gemini 4 Hydrogen (High)") or slug.
+ */
+const convDbCache = new Map(); // path -> { key, parsed }
+
+function openConvDb(dbPath, hasWal) {
+  try {
+    return new DatabaseSync(dbPath, { readOnly: true, timeout: 500 });
+  } catch (err) {
+    // A closed WAL database without -wal/-shm may refuse plain read-only opens;
+    // immutable is safe only when no writer is active.
+    if (hasWal) throw err;
+    const url = pathToFileURL(dbPath);
+    url.searchParams.set('immutable', '1');
+    return new DatabaseSync(url, { readOnly: true });
+  }
+}
+
+function parseConvModels(dbPath) {
+  if (!DatabaseSync) return null;
+  const st = statOf(dbPath);
+  if (st.size < 0) return null;
+  const wal = statOf(`${dbPath}-wal`);
+  const key = `${st.mtimeMs}:${st.size}|${wal.mtimeMs}:${wal.size}`;
+  const cached = convDbCache.get(dbPath);
+  if (cached && cached.key === key) return cached.parsed;
+
+  const names = new Map();  // modelId -> name
+  const daily = new Map();  // dateKey -> Map(modelId -> bucket)
+  let db = null;
+  try {
+    db = openConvDb(dbPath, wal.size >= 0);
+    for (const row of db.prepare('SELECT data FROM gen_metadata').iterate()) {
+      try {
+        const top = pbFields(row.data);
+        const a = pbGet(top, 1, 2);
+        if (a) {
+          const f = pbFields(a);
+          const id = pbGet(f, 3, 0);
+          const disp = pbGet(f, 21, 2);
+          const slug = pbGet(f, 19, 2);
+          if (id !== undefined) {
+            const name = disp ? utf8.decode(disp) : slug ? utf8.decode(slug) : '';
+            if (name && (!names.has(id) || (isDisplayName(name) && !isDisplayName(names.get(id))))) {
+              names.set(id, name);
+            }
+          }
+        }
+        const b = pbGet(top, 3, 2);
+        if (b) {
+          const f = pbFields(b);
+          const id = pbGet(f, 1, 0);
+          const slug = pbGet(f, 28, 2);
+          if (id !== undefined && slug && !names.has(id)) names.set(id, utf8.decode(slug));
+        }
+      } catch {
+        // Skip unknown/legacy gen_metadata encodings.
+      }
+    }
+    for (const row of db.prepare('SELECT metadata FROM steps WHERE step_type = 15').iterate()) {
+      if (!row.metadata) continue;
+      try {
+        const f = pbFields(row.metadata);
+        const usageBuf = pbGet(f, 9, 2);
+        const tsBuf = pbGet(f, 1, 2);
+        if (!usageBuf || !tsBuf) continue;
+        const u = pbFields(usageBuf);
+        const id = pbGet(u, 1, 0) ?? pbGet(f, 11, 0);
+        if (id === undefined) continue;
+        const seconds = pbGet(pbFields(tsBuf), 1, 0) || 0;
+        const dateKey = toLocalDateKey(seconds * 1000);
+        if (!daily.has(dateKey)) daily.set(dateKey, new Map());
+        const perDay = daily.get(dateKey);
+        if (!perDay.has(id)) perDay.set(id, emptyBucket());
+        addToBucket(perDay.get(id), pbGet(u, 2, 0) || 0, pbGet(u, 5, 0) || 0, pbGet(u, 3, 0) || 0, true);
+      } catch {
+        // Skip malformed step metadata.
+      }
+    }
+  } catch {
+    return cached ? cached.parsed : null;
+  } finally {
+    try { db?.close(); } catch { /* ignore */ }
+  }
+  const parsed = { key, names, daily };
+  convDbCache.set(dbPath, { key, parsed });
+  return parsed;
+}
+
+function mergeModelBucket(target, id, b) {
+  if (!target.has(id)) target.set(id, emptyBucket());
+  const t = target.get(id);
+  t.input += b.input;
+  t.cacheRead += b.cacheRead;
+  t.output += b.output;
+  t.total += b.total;
+  t.net += b.net;
+  t.steps += b.steps;
+}
+
+function modelList(map, names) {
+  return [...map.entries()]
+    .map(([id, b]) => ({ id, name: names.get(id) || `Model ${id}`, ...b }))
+    .filter((m) => m.total > 0)
+    .sort((a, b) => b.total - a.total);
 }
 
 /**
@@ -275,6 +438,8 @@ function buildSnapshot() {
   const appDataDirs = findAppDataDirs();
   const metaByConv = new Map();
   const transcripts = [];
+  const modelSources = [];
+  const seenModelConvs = new Set();
   const etagParts = [todayKey];
 
   for (const appData of appDataDirs) {
@@ -290,6 +455,35 @@ function buildSnapshot() {
       if (!parsed) continue;
       transcripts.push(parsed);
       etagParts.push(`${entry}:${parsed.key}`);
+    }
+    const convDir = join(appData, 'conversations');
+    for (const file of safeReaddir(convDir).sort()) {
+      const cid = file.slice(0, -3);
+      // Backup app-data dirs may hold copies of the same conversation; count each once.
+      if (!file.endsWith('.db') || !UUID_RE.test(cid) || seenModelConvs.has(cid)) continue;
+      const parsed = parseConvModels(join(convDir, file));
+      if (!parsed) continue;
+      seenModelConvs.add(cid);
+      modelSources.push(parsed);
+      etagParts.push(`m${file}:${parsed.key}`);
+    }
+  }
+
+  const modelNames = new Map();
+  const modelTotals = new Map();
+  const modelsByDay = new Map(); // dateKey -> Map(modelId -> bucket)
+  for (const src of modelSources) {
+    for (const [id, name] of src.names) {
+      if (!modelNames.has(id) || (isDisplayName(name) && !isDisplayName(modelNames.get(id)))) {
+        modelNames.set(id, name);
+      }
+    }
+    for (const [dateKey, perModel] of src.daily) {
+      if (!modelsByDay.has(dateKey)) modelsByDay.set(dateKey, new Map());
+      for (const [id, b] of perModel) {
+        mergeModelBucket(modelTotals, id, b);
+        mergeModelBucket(modelsByDay.get(dateKey), id, b);
+      }
     }
   }
 
@@ -428,6 +622,12 @@ function buildSnapshot() {
     daily,
     byDayConversations: Object.fromEntries(byDayConvs.entries()),
     topConversations,
+    models: {
+      total: modelList(modelTotals, modelNames),
+      byDay: Object.fromEntries(
+        [...modelsByDay.entries()].map(([d, m]) => [d, modelList(m, modelNames)]),
+      ),
+    },
   };
 }
 

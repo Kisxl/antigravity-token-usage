@@ -364,6 +364,37 @@ button { font: inherit; color: inherit; cursor: pointer; background: none; borde
   font-size: 12px;
 }
 
+/* Model distribution rows */
+.model-row {
+  flex-direction: column;
+  align-items: stretch;
+  gap: 6px;
+}
+.model-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+}
+.model-bar {
+  height: 6px;
+  border-radius: 999px;
+  background: var(--hm-0);
+  overflow: hidden;
+}
+.model-bar > span {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--hm-3);
+}
+.model-row:first-child .model-bar > span { background: var(--hm-4); }
+.model-split {
+  font-size: 11px;
+  color: var(--tk-fg-faint);
+  font-family: var(--tk-mono);
+}
+
 /* Codex floating pill tooltip */
 .tooltip {
   position: fixed;

@@ -78,6 +78,21 @@
       </div>
     </section>
 
+    <!-- Per-model token distribution -->
+    <section class="panel models-panel" aria-label="模型分布">
+      <div class="panel-header">
+        <div class="panel-title-wrap">
+          <h2 id="models-title" class="panel-title">模型分布</h2>
+          <span id="models-sub" class="panel-sub">—</span>
+        </div>
+        <div class="view-tabs" role="tablist" aria-label="模型统计范围">
+          <button type="button" role="tab" class="tab-btn active" data-mscope="all" aria-selected="true">累计</button>
+          <button type="button" role="tab" class="tab-btn" data-mscope="day" aria-selected="false">所选日期</button>
+        </div>
+      </div>
+      <div id="models-list" class="details-list"></div>
+    </section>
+
     <!-- Selected Day Breakdown / Top Sessions -->
     <section class="panel details-panel" aria-label="明细列表">
       <div class="panel-header">

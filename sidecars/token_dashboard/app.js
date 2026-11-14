@@ -47,6 +47,13 @@
         return `累计至 ${y}年${m}月${d}日 起的一周`;
       },
       fmtTokLine: (val) => `${fmtTokens(val)} 个 Token`,
+      modelsTitle: '模型分布',
+      mscopeAll: '累计',
+      mscopeDay: '所选日期',
+      modelsSubAll: (n, tot) => `${n} 个模型 · 累计 ${tot}`,
+      modelsSubDay: (d, n, tot) => `${d} · ${n} 个模型 · 合计 ${tot}`,
+      noModelRecords: '暂无模型用量记录',
+      modelRight: (pct, s) => `${pct} · ${s} 步`,
       months: ['1月', '2月', '3月', '4月', '5月', '6月', '7月', '8月', '9月', '10月', '11月', '12月'],
     },
     en: {
@@ -93,6 +100,13 @@
         return `Cumulative through week of ${I18N.en.months[m - 1]} ${d}, ${y}`;
       },
       fmtTokLine: (val) => `${fmtTokens(val)} tokens`,
+      modelsTitle: 'Models',
+      mscopeAll: 'All Time',
+      mscopeDay: 'Selected Day',
+      modelsSubAll: (n, tot) => `${n} models · Total ${tot}`,
+      modelsSubDay: (d, n, tot) => `${d} · ${n} models · Total ${tot}`,
+      noModelRecords: 'No model usage recorded',
+      modelRight: (pct, s) => `${pct} · ${s} steps`,
       months: ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'],
     },
   };
@@ -117,6 +131,7 @@
     scope: loadPref('tokenUsage.scope', ['all', 'today'], 'all'),
     view: 'daily',     // 'daily' | 'weekly' | 'cumulative'
     detail: 'day',     // 'day' | 'top'
+    mscope: loadPref('tokenUsage.scope', ['all', 'today'], 'all') === 'today' ? 'day' : 'all',
     selectedDate: '',
     autoFollowToday: true,
     didScrollHeatmap: false,
@@ -215,6 +230,14 @@
     document.querySelector('.tab-btn[data-view="cumulative"]').textContent = tr.tabCumulative;
     document.querySelector('.tab-btn[data-detail="day"]').textContent = tr.detailDay;
     document.querySelector('.tab-btn[data-detail="top"]').textContent = tr.detailTop;
+    $('models-title').textContent = tr.modelsTitle;
+    document.querySelector('.tab-btn[data-mscope="all"]').textContent = tr.mscopeAll;
+    document.querySelector('.tab-btn[data-mscope="day"]').textContent = tr.mscopeDay;
+    document.querySelectorAll('.tab-btn[data-mscope]').forEach((b) => {
+      const active = b.dataset.mscope === state.mscope;
+      b.classList.toggle('active', active);
+      b.setAttribute('aria-selected', String(active));
+    });
 
     document.querySelectorAll('.seg-btn[data-lang]').forEach((b) => {
       b.classList.toggle('active', b.dataset.lang === state.lang);
@@ -467,6 +490,44 @@
     `;
   }
 
+  function renderModels(snap) {
+    const tr = t();
+    const listEl = $('models-list');
+    const models = snap.models || { total: [], byDay: {} };
+    const dateKey = state.selectedDate || snap.todayKey;
+    const items = state.mscope === 'day' ? models.byDay[dateKey] || [] : models.total || [];
+    const sum = items.reduce((s, m) => s + (m.total || 0), 0);
+    $('models-sub').textContent =
+      state.mscope === 'day'
+        ? tr.modelsSubDay(dateKey, items.length, fmtTokens(sum))
+        : tr.modelsSubAll(items.length, fmtTokens(sum));
+
+    if (!items.length) {
+      listEl.innerHTML = `<div class="empty-state">${esc(tr.noModelRecords)}</div>`;
+      return;
+    }
+    const max = items[0].total || 1;
+    listEl.innerHTML = items
+      .map((m) => {
+        const pct = sum ? `${((m.total / sum) * 100).toFixed(1)}%` : '0%';
+        const width = Math.max(1, (m.total / max) * 100).toFixed(1);
+        return `
+          <div class="detail-row model-row">
+            <div class="model-head">
+              <span class="detail-title">${esc(m.name)}</span>
+              <span class="detail-metrics">
+                <span class="detail-tok">${esc(fmtTokens(m.total))}</span>
+                <span class="detail-sub"> · ${esc(tr.modelRight(pct, m.steps))}</span>
+              </span>
+            </div>
+            <div class="model-bar"><span style="width:${width}%"></span></div>
+            <div class="model-split">In ${esc(fmtTokens(m.input))} · Cache ${esc(fmtTokens(m.cacheRead))} · Out ${esc(fmtTokens(m.output))}</div>
+          </div>
+        `;
+      })
+      .join('');
+  }
+
   function renderAll() {
     applyStaticLabels();
     if (!state.snap) return;
@@ -475,6 +536,7 @@
     }
     renderKpis(state.snap);
     renderMatrix(state.snap);
+    renderModels(state.snap);
     renderDetails(state.snap);
   }
 
@@ -504,6 +566,7 @@
     btn.addEventListener('click', () => {
       state.scope = btn.dataset.scope;
       savePref('tokenUsage.scope', state.scope);
+      state.mscope = state.scope === 'today' ? 'day' : 'all';
       if (state.scope === 'today' && state.snap) {
         state.selectedDate = state.snap.todayKey;
         state.autoFollowToday = true;
@@ -546,6 +609,13 @@
   });
 
   $('refresh-btn').addEventListener('click', () => fetchStats(true));
+
+  document.querySelectorAll('.tab-btn[data-mscope]').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      state.mscope = btn.dataset.mscope;
+      renderAll();
+    });
+  });
 
   function clearColHover() {
     document.querySelectorAll('.cell.col-hover').forEach((el) => el.classList.remove('col-hover'));
@@ -591,6 +661,7 @@
     state.selectedDate = cell.dataset.date;
     state.autoFollowToday = state.selectedDate === state.snap?.todayKey;
     state.detail = 'day';
+    state.mscope = 'day';
     document.querySelectorAll('.tab-btn[data-detail]').forEach((b) => {
       const active = b.dataset.detail === 'day';
       b.classList.toggle('active', active);
