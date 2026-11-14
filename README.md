@@ -24,15 +24,23 @@ A native **Antigravity 2.0** Plugin + Sidecar that brings a **Codex-style local 
 - **100% Local & Read-Only**:
   - Reads `~/.gemini/antigravity/brain/*/.system_generated/logs/transcript.jsonl` and `conversation_summaries.db` (read-only) with `(mtime, size)` + `etag` caching. Zero external network requests.
 
-## Installation
+## Installation & Usage
 
 Clone directly into your global Antigravity plugins directory:
 
+**macOS / Linux:**
 ```bash
 git clone https://github.com/Kisxl/antigravity-token-usage.git ~/.gemini/config/plugins/token-usage
 ```
 
-Then open **Plugins** in Antigravity (or restart Antigravity) to enable **Token Usage**.
+**Windows (PowerShell):**
+```powershell
+git clone https://github.com/Kisxl/antigravity-token-usage.git "$HOME\.gemini\config\plugins\token-usage"
+```
+
+Then open **Plugins** in Antigravity (or restart Antigravity) to enable **Token Usage**, and open it from the left sidebar or **Overview → Extensions → Token Usage**:
+
+![How to open Token Usage](assets/usage-guide.png)
 
 ---
 
@@ -45,8 +53,18 @@ Then open **Plugins** in Antigravity (or restart Antigravity) to enable **Token 
 - **范围与语言切换**：支持 `总计 / 今日新增` 与 `中文 / EN` 实时切换。
 - **纯本地只读**：仅读取本机 `~/.gemini/antigravity/` 日志与 SQLite 摘要库，无任何外部网络请求。
 
-### 安装方式
+### 安装与使用
 
+**macOS / Linux：**
 ```bash
 git clone https://github.com/Kisxl/antigravity-token-usage.git ~/.gemini/config/plugins/token-usage
 ```
+
+**Windows (PowerShell)：**
+```powershell
+git clone https://github.com/Kisxl/antigravity-token-usage.git "$HOME\.gemini\config\plugins\token-usage"
+```
+
+安装后在 Antigravity 的 **Plugins** 中启用 **Token Usage**（或重启 Antigravity），即可在左侧边栏或右上角 **Overview → Extensions → Token 用量** 中打开：
+
+![打开方式指引](assets/usage-guide.png)
