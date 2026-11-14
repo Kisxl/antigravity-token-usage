@@ -1,0 +1,401 @@
+:root {
+  color-scheme: dark;
+  --tk-bg: var(--background, #141416);
+  --tk-card: var(--card, #1a1b1e);
+  --tk-elevated: var(--secondary, #242529);
+  --tk-fg: var(--foreground, #f2f2f5);
+  --tk-fg-muted: var(--muted-foreground, #8e929b);
+  --tk-fg-faint: var(--placeholder, #5d616b);
+  --tk-border: var(--card-border, rgba(255, 255, 255, 0.08));
+  --tk-border-strong: var(--border, rgba(255, 255, 255, 0.14));
+  --tk-hover: color-mix(in srgb, var(--tk-fg) 6%, transparent);
+  --tk-font: var(--font-family, -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Hiragino Sans GB", sans-serif);
+  --tk-mono: var(--editor-font-family, ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace);
+
+  /* Codex activity dot palette (dark mode) */
+  --hm-0: #26272b;
+  --hm-1: #0b3a6f;
+  --hm-2: #0d58a8;
+  --hm-3: #007eff;
+  --hm-4: #58b2ff;
+  --accent-emerald: #34d399;
+}
+
+:root[data-theme="light"] {
+  color-scheme: light;
+  --tk-bg: var(--background, #f6f7f9);
+  --tk-card: var(--card, #ffffff);
+  --tk-elevated: var(--secondary, #eef0f4);
+  --tk-fg: var(--foreground, #17191c);
+  --tk-fg-muted: var(--muted-foreground, #5e6672);
+  --tk-fg-faint: var(--placeholder, #8b94a0);
+  --tk-border: var(--card-border, rgba(0, 0, 0, 0.09));
+  --tk-border-strong: var(--border, rgba(0, 0, 0, 0.14));
+  --hm-0: #e8ebef;
+  --hm-1: #b6d8ff;
+  --hm-2: #6bb2ff;
+  --hm-3: #257be6;
+  --hm-4: #0e4da4;
+}
+
+* { box-sizing: border-box; }
+html, body {
+  margin: 0;
+  padding: 0;
+  background: var(--tk-bg);
+  color: var(--tk-fg);
+  font-family: var(--tk-font);
+  font-size: 13px;
+  line-height: 1.45;
+  -webkit-font-smoothing: antialiased;
+}
+
+button { font: inherit; color: inherit; cursor: pointer; background: none; border: 0; }
+.hidden { display: none !important; }
+
+.shell {
+  max-width: 960px;
+  margin: 0 auto;
+  padding: 20px 22px 36px;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+/* Top bar */
+.topbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+.topbar-left, .topbar-right {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+.title-group {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+.live-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 999px;
+  background: var(--accent-emerald);
+  box-shadow: 0 0 8px color-mix(in srgb, var(--accent-emerald) 65%, transparent);
+}
+.live-dot.error {
+  background: #f87171;
+  box-shadow: none;
+}
+.page-title {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+
+.segmented {
+  display: inline-flex;
+  background: var(--tk-card);
+  border: 1px solid var(--tk-border);
+  border-radius: 999px;
+  padding: 2px;
+  gap: 2px;
+}
+.seg-btn {
+  padding: 3px 10px;
+  border-radius: 999px;
+  font-size: 12px;
+  color: var(--tk-fg-muted);
+  transition: background 0.15s ease, color 0.15s ease;
+}
+.seg-btn:hover { color: var(--tk-fg); }
+.seg-btn.active {
+  background: var(--tk-elevated);
+  color: var(--tk-fg);
+  font-weight: 500;
+}
+
+.icon-btn {
+  width: 28px;
+  height: 28px;
+  border-radius: 8px;
+  border: 1px solid var(--tk-border);
+  background: var(--tk-card);
+  color: var(--tk-fg-muted);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition: color 0.15s ease, background 0.15s ease;
+}
+.icon-btn:hover { color: var(--tk-fg); background: var(--tk-hover); }
+.icon-btn.spinning svg { animation: spin 0.7s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }
+
+/* Top 5-KPI Codex pill card */
+.kpi-strip {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  background: transparent;
+  border: 1px solid var(--tk-border);
+  border-radius: 999px;
+  padding: 15px 8px;
+}
+.kpi-item {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  padding: 2px 10px;
+  gap: 4px;
+}
+.kpi-item + .kpi-item::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 12%;
+  bottom: 12%;
+  width: 1px;
+  background: var(--tk-border);
+}
+.kpi-value {
+  font-size: 17px;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  font-variant-numeric: tabular-nums;
+  color: var(--tk-fg);
+}
+.kpi-label {
+  font-size: 12px;
+  color: var(--tk-fg-muted);
+}
+
+/* Panels */
+.panel {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+.panel-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+.panel-title-wrap {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+.panel-title {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 600;
+}
+.panel-sub {
+  font-size: 12px;
+  color: var(--tk-fg-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.view-tabs {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.tab-btn {
+  padding: 3px 9px;
+  border-radius: 999px;
+  font-size: 12px;
+  color: var(--tk-fg-muted);
+  transition: color 0.15s ease, background 0.15s ease;
+}
+.tab-btn:hover { color: var(--tk-fg); }
+.tab-btn.active {
+  color: var(--tk-fg);
+  font-weight: 600;
+}
+
+/* Codex 53x7 Matrix */
+.heatmap-scroll {
+  overflow-x: auto;
+  overflow-y: hidden;
+  padding: 4px 2px 6px;
+  scrollbar-width: thin;
+}
+.heatmap-inner {
+  min-width: max-content;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.heatmap-grid {
+  display: grid;
+  grid-auto-flow: column;
+  grid-template-rows: repeat(7, 13px);
+  grid-auto-columns: 13px;
+  gap: 4px;
+}
+.cell {
+  width: 13px;
+  height: 13px;
+  border-radius: 3.5px;
+  background: var(--hm-0);
+  transition: transform 0.1s ease, outline-color 0.1s ease;
+  outline: 1px solid transparent;
+}
+.cell.future {
+  opacity: 0.35;
+  pointer-events: none;
+}
+.cell.lv-0 { background: var(--hm-0); }
+.cell.lv-1 { background: var(--hm-1); }
+.cell.lv-2 { background: var(--hm-2); }
+.cell.lv-3 { background: var(--hm-3); }
+.cell.lv-4 { background: var(--hm-4); }
+
+.cell[data-date]:hover,
+.cell[data-col]:hover {
+  transform: scale(1.16);
+  outline: 1.5px solid var(--tk-fg);
+  cursor: pointer;
+  z-index: 2;
+}
+.cell.col-hover {
+  filter: brightness(1.18);
+}
+.cell.selected {
+  outline: 1.5px solid var(--tk-fg);
+  outline-offset: 1px;
+}
+
+.heatmap-months {
+  position: relative;
+  height: 18px;
+  font-size: 12px;
+  color: var(--tk-fg-muted);
+}
+.month-label {
+  position: absolute;
+  top: 0;
+  white-space: nowrap;
+}
+
+/* Details list */
+.details-list {
+  display: flex;
+  flex-direction: column;
+  background: var(--tk-card);
+  border: 1px solid var(--tk-border);
+  border-radius: 14px;
+  overflow: hidden;
+}
+.detail-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 11px 16px;
+  border-bottom: 1px solid var(--tk-border);
+  transition: background 0.12s ease;
+}
+.detail-row:last-child { border-bottom: 0; }
+.detail-row:hover { background: var(--tk-hover); }
+.detail-main {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.detail-title-row {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  min-width: 0;
+}
+.detail-title {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--tk-fg);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.detail-title.clickable { cursor: pointer; }
+.detail-title.clickable:hover {
+  color: var(--hm-4);
+  text-decoration: underline;
+}
+.badge {
+  font-size: 10px;
+  padding: 1px 6px;
+  border-radius: 999px;
+  background: var(--tk-elevated);
+  color: var(--tk-fg-muted);
+  border: 1px solid var(--tk-border);
+  flex-shrink: 0;
+}
+.detail-metrics {
+  text-align: right;
+  flex-shrink: 0;
+  font-variant-numeric: tabular-nums;
+}
+.detail-tok {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--tk-fg);
+}
+.detail-sub {
+  font-size: 11px;
+  color: var(--tk-fg-muted);
+}
+.empty-state {
+  padding: 26px 16px;
+  text-align: center;
+  color: var(--tk-fg-muted);
+  font-size: 12px;
+}
+
+/* Codex floating pill tooltip */
+.tooltip {
+  position: fixed;
+  z-index: 1000;
+  pointer-events: none;
+  background: color-mix(in srgb, var(--tk-elevated) 96%, black);
+  border: 1px solid var(--tk-border-strong);
+  border-radius: 12px;
+  padding: 8px 13px;
+  font-size: 12px;
+  color: var(--tk-fg);
+  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.42);
+  font-variant-numeric: tabular-nums;
+  line-height: 1.45;
+}
+.tt-title { font-weight: 500; color: var(--tk-fg); }
+.tt-val { color: var(--tk-fg-muted); }
+
+@media (max-width: 680px) {
+  .shell { padding: 14px 14px 28px; gap: 14px; }
+  .kpi-strip {
+    border-radius: 14px;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    padding: 8px;
+    gap: 8px;
+  }
+  .kpi-item {
+    border: 1px solid var(--tk-border);
+    border-radius: 10px;
+    padding: 10px 8px;
+  }
+  .kpi-item + .kpi-item::before { display: none; }
+  .kpi-item:first-child { grid-column: span 2; }
+  .kpi-value { font-size: 16px; }
+}

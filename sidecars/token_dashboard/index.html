@@ -1,0 +1,100 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta http-equiv="Content-Security-Policy" content="frame-src 'none'; child-src 'none'">
+  <title>Token 用量</title>
+  <script src="/preload.js"></script>
+  <link rel="stylesheet" href="/styles.css">
+</head>
+<body>
+  <div class="shell">
+    <header class="topbar">
+      <div class="topbar-left">
+        <span class="title-group">
+          <span class="live-dot" id="live-dot" title="自动同步本地日志"></span>
+          <h1 class="page-title" id="page-title">Token 用量</h1>
+        </span>
+      </div>
+      <div class="topbar-right">
+        <div class="segmented" role="group" aria-label="统计范围">
+          <button type="button" class="seg-btn active" data-scope="all">总计</button>
+          <button type="button" class="seg-btn" data-scope="today">今日新增</button>
+        </div>
+        <div class="segmented" role="group" aria-label="语言切换">
+          <button type="button" class="seg-btn active" data-lang="zh">中文</button>
+          <button type="button" class="seg-btn" data-lang="en">EN</button>
+        </div>
+        <button type="button" id="refresh-btn" class="icon-btn" title="立即刷新" aria-label="刷新数据">
+          <svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M13.5 8a5.5 5.5 0 1 1-1.35-3.61"/>
+            <path d="M13.5 2.5v2.6h-2.6"/>
+          </svg>
+        </button>
+      </div>
+    </header>
+
+    <!-- Top 5 KPI strip (Codex 2-line style) -->
+    <section class="kpi-strip" aria-label="核心指标汇总">
+      <div class="kpi-item" id="kpi-total">
+        <div class="kpi-value" data-kpi="total-val">—</div>
+        <div class="kpi-label" data-kpi="total-lbl">累计 Token 数</div>
+      </div>
+      <div class="kpi-item" id="kpi-peak">
+        <div class="kpi-value" data-kpi="peak-val">—</div>
+        <div class="kpi-label" data-kpi="peak-lbl">Token 使用峰值</div>
+      </div>
+      <div class="kpi-item" id="kpi-longest">
+        <div class="kpi-value" data-kpi="longest-val">—</div>
+        <div class="kpi-label" data-kpi="longest-lbl">最长任务用时</div>
+      </div>
+      <div class="kpi-item" id="kpi-max-streak">
+        <div class="kpi-value" data-kpi="max-streak-val">—</div>
+        <div class="kpi-label" data-kpi="max-streak-lbl">最长连续天数</div>
+      </div>
+      <div class="kpi-item" id="kpi-cur-streak">
+        <div class="kpi-value" data-kpi="cur-streak-val">—</div>
+        <div class="kpi-label" data-kpi="cur-streak-lbl">当前连续天数</div>
+      </div>
+    </section>
+
+    <!-- Codex Unified 53x7 Activity Matrix (Daily / Weekly / Cumulative) -->
+    <section class="panel activity-panel" aria-label="Token 活动">
+      <div class="panel-header">
+        <h2 id="activity-title" class="panel-title">Token 活动</h2>
+        <div class="view-tabs" role="tablist" aria-label="活动视图切换">
+          <button type="button" role="tab" class="tab-btn active" data-view="daily" aria-selected="true">每天</button>
+          <button type="button" role="tab" class="tab-btn" data-view="weekly" aria-selected="false">每周</button>
+          <button type="button" role="tab" class="tab-btn" data-view="cumulative" aria-selected="false">累计总量</button>
+        </div>
+      </div>
+
+      <div class="heatmap-scroll" id="heatmap-scroll">
+        <div class="heatmap-inner">
+          <div class="heatmap-grid" id="heatmap-grid" role="grid" aria-label="Token 活动矩阵"></div>
+          <div class="heatmap-months" id="heatmap-months"></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Selected Day Breakdown / Top Sessions -->
+    <section class="panel details-panel" aria-label="明细列表">
+      <div class="panel-header">
+        <div class="panel-title-wrap">
+          <h2 id="details-title" class="panel-title">当日会话明细</h2>
+          <span id="details-sub" class="panel-sub">—</span>
+        </div>
+        <div class="view-tabs" role="tablist" aria-label="明细切换">
+          <button type="button" role="tab" class="tab-btn active" data-detail="day" aria-selected="true">单日明细</button>
+          <button type="button" role="tab" class="tab-btn" data-detail="top" aria-selected="false">历史会话排行</button>
+        </div>
+      </div>
+      <div id="details-list" class="details-list"></div>
+    </section>
+  </div>
+
+  <div id="tooltip" class="tooltip hidden" role="tooltip"></div>
+  <script src="/app.js"></script>
+</body>
+</html>

@@ -1,0 +1,7 @@
+{
+  "name": "token-usage",
+  "displayName": "Token Usage",
+  "description": "本地每日 Token 用量统计面板：实时汇总累计 Token、每日峰值、最长任务用时、连续活跃天数与 Codex 风格年度活动热力图。",
+  "version": "1.0.0",
+  "logo": "assets/logo.svg"
+}
