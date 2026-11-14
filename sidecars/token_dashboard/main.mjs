@@ -55,20 +55,31 @@ function statOf(filePath) {
  * Mirrors swarm_board's discovery so both hosted and standalone modes work.
  */
 function findAppDataDirs() {
+  const dirs = [];
+  const seen = new Set();
+  const add = (dir) => {
+    if (!dir || seen.has(dir)) return;
+    if (existsSync(join(dir, 'brain')) || existsSync(join(dir, 'conversations'))) {
+      seen.add(dir);
+      dirs.push(dir);
+    }
+  };
+
   const execDataDir = process.env.ANTIGRAVITY_EXECUTABLE_DATA_DIR;
   if (execDataDir) {
     for (let d = execDataDir; d !== dirname(d); d = dirname(d)) {
-      if (basename(d) !== 'sidecar_data') continue;
-      const appData = dirname(d);
-      return existsSync(join(appData, 'brain')) ? [appData] : [];
+      if (basename(d) === 'sidecar_data') {
+        add(dirname(d));
+        break;
+      }
     }
-    return [];
   }
+
   const root = join(homedir(), '.gemini');
-  return safeReaddir(root)
-    .sort()
-    .map((name) => join(root, name))
-    .filter((dir) => existsSync(join(dir, 'brain')));
+  for (const name of safeReaddir(root).sort()) {
+    add(join(root, name));
+  }
+  return dirs;
 }
 
 function toLocalDateKey(ms) {
@@ -211,7 +222,7 @@ function openConvDb(dbPath, hasWal) {
   }
 }
 
-function parseConvModels(dbPath) {
+function parseConvDb(dbPath, convId) {
   if (!DatabaseSync) return null;
   const st = statOf(dbPath);
   if (st.size < 0) return null;
@@ -220,8 +231,27 @@ function parseConvModels(dbPath) {
   const cached = convDbCache.get(dbPath);
   if (cached && cached.key === key) return cached.parsed;
 
-  const names = new Map();  // modelId -> name
-  const daily = new Map();  // dateKey -> Map(modelId -> bucket)
+  const names = new Map();      // modelId -> name
+  const modelDaily = new Map(); // dateKey -> Map(modelId -> bucket)
+  const daily = new Map();      // dateKey -> bucket
+  const totals = emptyBucket();
+  let maxTurn = { durationMs: 0, date: '' };
+  let lastDate = '';
+
+  let turnActiveMs = 0;
+  let turnStartDate = '';
+  let prevStepMs = null;
+
+  const flushTurn = () => {
+    if (turnStartDate && turnActiveMs > maxTurn.durationMs) {
+      maxTurn = { durationMs: turnActiveMs, date: turnStartDate };
+    }
+    if (turnStartDate) {
+      const b = daily.get(turnStartDate);
+      if (b) b.activeMs += turnActiveMs;
+    }
+  };
+
   let db = null;
   try {
     db = openConvDb(dbPath, wal.size >= 0);
@@ -252,32 +282,75 @@ function parseConvModels(dbPath) {
         // Skip unknown/legacy gen_metadata encodings.
       }
     }
-    for (const row of db.prepare('SELECT metadata FROM steps WHERE step_type = 15').iterate()) {
+    for (const row of db.prepare('SELECT step_type, metadata FROM steps ORDER BY idx').iterate()) {
       if (!row.metadata) continue;
       try {
         const f = pbFields(row.metadata);
-        const usageBuf = pbGet(f, 9, 2);
         const tsBuf = pbGet(f, 1, 2);
-        if (!usageBuf || !tsBuf) continue;
-        const u = pbFields(usageBuf);
-        const id = pbGet(u, 1, 0) ?? pbGet(f, 11, 0);
-        if (id === undefined) continue;
-        const seconds = pbGet(pbFields(tsBuf), 1, 0) || 0;
-        const dateKey = toLocalDateKey(seconds * 1000);
-        if (!daily.has(dateKey)) daily.set(dateKey, new Map());
-        const perDay = daily.get(dateKey);
-        if (!perDay.has(id)) perDay.set(id, emptyBucket());
-        addToBucket(perDay.get(id), pbGet(u, 2, 0) || 0, pbGet(u, 5, 0) || 0, pbGet(u, 3, 0) || 0, true);
+        if (!tsBuf) continue;
+        const seconds = pbGet(pbFields(tsBuf), 1, 0);
+        if (!seconds) continue;
+        const ms = seconds * 1000;
+        const dateKey = toLocalDateKey(ms);
+        if (dateKey > lastDate) lastDate = dateKey;
+
+        const isUserInput = row.step_type === 14;
+        const usageBuf = row.step_type === 15 ? pbGet(f, 9, 2) : undefined;
+        let inp = 0;
+        let outp = 0;
+        let cache = 0;
+        let hasTokens = false;
+        let modelId = 'unknown';
+
+        if (usageBuf) {
+          const u = pbFields(usageBuf);
+          inp = Math.max(0, pbGet(u, 2, 0) || 0);
+          outp = Math.max(0, pbGet(u, 3, 0) || 0);
+          cache = Math.max(0, pbGet(u, 5, 0) || 0);
+          hasTokens = inp > 0 || outp > 0 || cache > 0;
+          modelId = pbGet(u, 1, 0) ?? pbGet(f, 11, 0) ?? 'unknown';
+        }
+
+        let dayBucket = daily.get(dateKey);
+        if (!dayBucket && (hasTokens || isUserInput)) {
+          dayBucket = emptyBucket();
+          daily.set(dateKey, dayBucket);
+        }
+
+        if (hasTokens) {
+          addToBucket(dayBucket, inp, cache, outp, true);
+          addToBucket(totals, inp, cache, outp, true);
+          if (!modelDaily.has(dateKey)) modelDaily.set(dateKey, new Map());
+          const perDay = modelDaily.get(dateKey);
+          if (!perDay.has(modelId)) perDay.set(modelId, emptyBucket());
+          addToBucket(perDay.get(modelId), inp, cache, outp, true);
+        }
+
+        if (isUserInput) {
+          flushTurn();
+          turnActiveMs = 0;
+          turnStartDate = dateKey;
+          prevStepMs = ms;
+          dayBucket.turns += 1;
+          totals.turns += 1;
+        } else if (turnStartDate && prevStepMs !== null) {
+          const delta = ms - prevStepMs;
+          if (delta > 0 && delta <= MAX_ACTIVE_GAP_MS) {
+            turnActiveMs += delta;
+          }
+          prevStepMs = ms;
+        }
       } catch {
         // Skip malformed step metadata.
       }
     }
+    flushTurn();
   } catch {
     return cached ? cached.parsed : null;
   } finally {
     try { db?.close(); } catch { /* ignore */ }
   }
-  const parsed = { key, names, daily };
+  const parsed = { convId, key, daily, totals, maxTurn, lastDate, names, modelDaily };
   convDbCache.set(dbPath, { key, parsed });
   return parsed;
 }
@@ -461,8 +534,7 @@ function buildSnapshot() {
   const appDataDirs = findAppDataDirs();
   const metaByConv = new Map();
   const transcripts = [];
-  const modelSources = [];
-  const seenModelConvs = new Set();
+  const seenConvs = new Set();
   const etagParts = [todayKey];
 
   for (const appData of appDataDirs) {
@@ -470,42 +542,51 @@ function buildSnapshot() {
     for (const [cid, info] of dbMeta.entries()) {
       if (!metaByConv.has(cid)) metaByConv.set(cid, info);
     }
-    const brainDir = join(appData, 'brain');
-    for (const entry of safeReaddir(brainDir).sort()) {
-      if (!UUID_RE.test(entry)) continue;
-      const logPath = join(brainDir, entry, '.system_generated', 'logs', 'transcript.jsonl');
-      const parsed = parseTranscript(logPath, entry);
-      if (!parsed) continue;
-      transcripts.push(parsed);
-      etagParts.push(`${entry}:${parsed.key}`);
-    }
     const convDir = join(appData, 'conversations');
     for (const file of safeReaddir(convDir).sort()) {
       const cid = file.slice(0, -3);
-      // Backup app-data dirs may hold copies of the same conversation; count each once.
-      if (!file.endsWith('.db') || !UUID_RE.test(cid) || seenModelConvs.has(cid)) continue;
-      const parsed = parseConvModels(join(convDir, file));
+      if (!file.endsWith('.db') || !UUID_RE.test(cid) || seenConvs.has(cid)) continue;
+      const parsed = parseConvDb(join(convDir, file), cid);
       if (!parsed) continue;
-      seenModelConvs.add(cid);
-      modelSources.push(parsed);
-      etagParts.push(`m${file}:${parsed.key}`);
+      seenConvs.add(cid);
+      transcripts.push(parsed);
+      etagParts.push(`db:${cid}:${parsed.key}`);
+    }
+    const brainDir = join(appData, 'brain');
+    for (const entry of safeReaddir(brainDir).sort()) {
+      if (!UUID_RE.test(entry) || seenConvs.has(entry)) continue;
+      const logPath = join(brainDir, entry, '.system_generated', 'logs', 'transcript.jsonl');
+      const parsed = parseTranscript(logPath, entry);
+      if (!parsed) continue;
+      seenConvs.add(entry);
+      transcripts.push(parsed);
+      etagParts.push(`tr:${entry}:${parsed.key}`);
     }
   }
 
-  const modelNames = new Map();
+  const modelNames = new Map([['unknown', 'Other']]);
   const modelTotals = new Map();
   const modelsByDay = new Map(); // dateKey -> Map(modelId -> bucket)
-  for (const src of modelSources) {
-    for (const [id, name] of src.names) {
-      if (!modelNames.has(id) || (isDisplayName(name) && !isDisplayName(modelNames.get(id)))) {
-        modelNames.set(id, name);
+  for (const src of transcripts) {
+    if (src.names) {
+      for (const [id, name] of src.names) {
+        if (!modelNames.has(id) || (isDisplayName(name) && !isDisplayName(modelNames.get(id)))) {
+          modelNames.set(id, name);
+        }
       }
-    }
-    for (const [dateKey, perModel] of src.daily) {
-      if (!modelsByDay.has(dateKey)) modelsByDay.set(dateKey, new Map());
-      for (const [id, b] of perModel) {
-        mergeModelBucket(modelTotals, id, b);
-        mergeModelBucket(modelsByDay.get(dateKey), id, b);
+      for (const [dateKey, perModel] of src.modelDaily) {
+        if (!modelsByDay.has(dateKey)) modelsByDay.set(dateKey, new Map());
+        for (const [id, b] of perModel) {
+          mergeModelBucket(modelTotals, id, b);
+          mergeModelBucket(modelsByDay.get(dateKey), id, b);
+        }
+      }
+    } else {
+      for (const [dateKey, b] of src.daily) {
+        if (b.total <= 0) continue;
+        if (!modelsByDay.has(dateKey)) modelsByDay.set(dateKey, new Map());
+        mergeModelBucket(modelTotals, 'unknown', b);
+        mergeModelBucket(modelsByDay.get(dateKey), 'unknown', b);
       }
     }
   }
