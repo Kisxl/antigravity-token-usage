@@ -293,9 +293,32 @@ function mergeModelBucket(target, id, b) {
   t.steps += b.steps;
 }
 
+const TIER_SUFFIX_RE = /-(xhigh|high|medium|low|n|tiered|trial|exp-[a-z0-9]+)$/;
+
+/**
+ * Collapses tier variants into one family name:
+ * "Gemini 4 Hydrogen (High)" / "gemini-4-hydrogen-medium" -> "Gemini 4 Hydrogen".
+ */
+function baseModelName(name) {
+  let s = String(name).trim().replace(/\s*\([^)]*\)\s*$/, '');
+  if (/^[a-z0-9.\-]+$/.test(s)) {
+    while (TIER_SUFFIX_RE.test(s)) s = s.replace(TIER_SUFFIX_RE, '');
+    s = s
+      .split('-')
+      .map((w) => (/^[a-z]/.test(w) ? w[0].toUpperCase() + w.slice(1) : w))
+      .join(' ');
+  }
+  return s;
+}
+
 function modelList(map, names) {
-  return [...map.entries()]
-    .map(([id, b]) => ({ id, name: names.get(id) || `Model ${id}`, ...b }))
+  const merged = new Map();
+  for (const [id, b] of map) {
+    const name = baseModelName(names.get(id) || `Model ${id}`);
+    mergeModelBucket(merged, name, b);
+  }
+  return [...merged.entries()]
+    .map(([name, b]) => ({ name, ...b }))
     .filter((m) => m.total > 0)
     .sort((a, b) => b.total - a.total);
 }
