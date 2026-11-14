@@ -4,6 +4,8 @@ A native **Antigravity 2.0** Plugin + Sidecar that brings a **Codex-style local 
 
 [中文说明](#中文说明)
 
+![Antigravity Token Usage Dashboard](assets/preview.png)
+
 ---
 
 ## Features
@@ -27,7 +29,7 @@ A native **Antigravity 2.0** Plugin + Sidecar that brings a **Codex-style local 
 Clone directly into your global Antigravity plugins directory:
 
 ```bash
-git clone https://github.com/<your-username>/antigravity-token-usage.git ~/.gemini/config/plugins/token-usage
+git clone https://github.com/Kisxl/antigravity-token-usage.git ~/.gemini/config/plugins/token-usage
 ```
 
 Then open **Plugins** in Antigravity (or restart Antigravity) to enable **Token Usage**.
@@ -46,5 +48,5 @@ Then open **Plugins** in Antigravity (or restart Antigravity) to enable **Token 
 ### 安装方式
 
 ```bash
-git clone https://github.com/<your-username>/antigravity-token-usage.git ~/.gemini/config/plugins/token-usage
+git clone https://github.com/Kisxl/antigravity-token-usage.git ~/.gemini/config/plugins/token-usage
 ```
