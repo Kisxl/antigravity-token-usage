@@ -13,14 +13,16 @@ A native **Antigravity 2.0** Plugin + Sidecar that brings a **Codex-style local 
 - **Native Antigravity 2.0 Integration**:
   - `SIDECAR_UI_ENTRYPOINT_SIDEBAR`: Full-pane view listed under the left sidebar's **Plugins** section.
   - `SIDECAR_UI_ENTRYPOINT_AUX_PANE`: Compact side-panel view accessible right beside any conversation.
-- **Codex-Style 5-KPI Summary Strip**:
-  - Total Tokens · Peak Daily Usage · Longest Task Duration (active execution time, filtering out >10 min idle/error gaps) · Longest Streak · Current Streak.
+- **Codex-Style 6-KPI Summary Strip**:
+  - Total Tokens · Est. Cost · Peak Daily Usage · Longest Task Duration (active execution time, filtering out >10 min idle/error gaps) · Longest Streak · Current Streak.
 - **Unified 53×7 Activity Matrix**:
   - **Daily**: 53-week × 7-day blue-intensity heatmap; click any square to inspect that day's sessions.
   - **Weekly**: 7-block vertical equalizer per week column.
   - **Cumulative**: Step-up cumulative growth matrix.
 - **Per-Model Breakdown**:
   - Automatically groups tier variants (`High / Medium / Low`, etc.) into unified model families (Gemini / Claude / …), showing all-time or selected-day usage with In / Cache / Out split.
+- **Live Cost Estimate**:
+  - Estimates spend in USD (≈ CNY) from public API list prices per model family (incl. cache-read discount), shown as a KPI, per model, per session and in heatmap tooltips. Edit the `PRICING` table in `sidecars/token_dashboard/main.mjs` to customize rates.
 - **All Time / Today Toggle & Bilingual UI (`中文 / EN`)**:
   - Switch between all-time totals and today's new usage, and toggle Chinese / English UI with `localStorage` persistence.
 - **100% Local & Read-Only**:
@@ -51,8 +53,9 @@ Then open **Plugins** in Antigravity (or restart Antigravity) to enable **Token 
 专为 **Antigravity 2.0** 桌面端打造的原生 `Plugin + Sidecar` 本地 Token 监控面板，复刻 Codex 极简暗色点阵风格：
 
 - **双原生入口**：支持左侧边栏 `Plugins` 独立全屏页（`SIDEBAR`）与对话右侧辅助面板（`AUX_PANE`）。
-- **核心指标与三视图矩阵**：顶部 5 项 KPI（累计 Token 数、单日峰值、最长任务用时、最长连续天数、当前连续天数）+ 53×7 点阵热力图（每天 / 每周 / 累计总量），点击任意日期可下钻当日会话并直接点击跳转对应对话。
+- **核心指标与三视图矩阵**：顶部 6 项 KPI（新增估算费用）（累计 Token 数、单日峰值、最长任务用时、最长连续天数、当前连续天数）+ 53×7 点阵热力图（每天 / 每周 / 累计总量），点击任意日期可下钻当日会话并直接点击跳转对应对话。
 - **按模型统计**：自动合并同一模型系列的不同档位（`High / Medium / Low` 等），支持累计与所选日期两种范围，并显示 In / Cache / Out 拆分。
+- **实时费用估算**：按各模型系列官网 API 公开单价（含缓存折扣）实时估算花费（美元 / 约合人民币），显示在顶部 KPI、模型分布、会话明细与热力图悬停提示中；可在 `main.mjs` 的 `PRICING` 表中自定义单价。
 - **范围与语言切换**：支持 `总计 / 今日新增` 与 `中文 / EN` 实时切换。
 - **纯本地只读**：优先只读读取全部 `~/.gemini/antigravity*` 目录下的 `conversations/*.db`（按会话去重汇总，缺失时回退 `transcript.jsonl`）及摘要库，无任何外部网络请求。
 

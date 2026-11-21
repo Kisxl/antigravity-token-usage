@@ -98,16 +98,17 @@ function addDays(dateKey, deltaDays) {
 }
 
 function emptyBucket() {
-  return { input: 0, cacheRead: 0, output: 0, total: 0, net: 0, steps: 0, turns: 0, activeMs: 0 };
+  return { input: 0, cacheRead: 0, output: 0, total: 0, net: 0, cost: 0, steps: 0, turns: 0, activeMs: 0 };
 }
 
-function addToBucket(bucket, input, cacheRead, output, hasTokens) {
+function addToBucket(bucket, input, cacheRead, output, hasTokens, cost = 0) {
   if (!hasTokens) return;
   bucket.input += input;
   bucket.cacheRead += cacheRead;
   bucket.output += output;
   bucket.net += input + output;
   bucket.total += input + cacheRead + output;
+  bucket.cost += cost;
   bucket.steps += 1;
 }
 
@@ -318,12 +319,13 @@ function parseConvDb(dbPath, convId) {
         }
 
         if (hasTokens) {
-          addToBucket(dayBucket, inp, cache, outp, true);
-          addToBucket(totals, inp, cache, outp, true);
+          const stepCost = costOf(priceFor(names.get(modelId)), inp, cache, outp);
+          addToBucket(dayBucket, inp, cache, outp, true, stepCost);
+          addToBucket(totals, inp, cache, outp, true, stepCost);
           if (!modelDaily.has(dateKey)) modelDaily.set(dateKey, new Map());
           const perDay = modelDaily.get(dateKey);
           if (!perDay.has(modelId)) perDay.set(modelId, emptyBucket());
-          addToBucket(perDay.get(modelId), inp, cache, outp, true);
+          addToBucket(perDay.get(modelId), inp, cache, outp, true, stepCost);
         }
 
         if (isUserInput) {
@@ -363,7 +365,31 @@ function mergeModelBucket(target, id, b) {
   t.output += b.output;
   t.total += b.total;
   t.net += b.net;
+  t.cost += b.cost || 0;
   t.steps += b.steps;
+}
+
+// List prices in USD per 1M tokens: [input, cacheRead, output].
+// Matched case-insensitively against raw model names; first match wins.
+const PRICING = [
+  { re: /opus/i,             family: 'Claude Opus',   price: [15, 1.5, 75] },
+  { re: /sonnet/i,           family: 'Claude Sonnet', price: [3, 0.3, 15] },
+  { re: /haiku/i,            family: 'Claude Haiku',  price: [1, 0.1, 5] },
+  { re: /gpt[- ]?oss/i,      family: 'GPT-OSS',       price: [0.15, 0.075, 0.6] },
+  { re: /gpt/i,              family: 'GPT',           price: [1.25, 0.125, 10] },
+  { re: /\bpro\b|hydrogen/i, family: 'Gemini Pro',    price: [1.25, 0.3125, 10] },
+  { re: /flash|argon/i,      family: 'Gemini Flash',  price: [0.3, 0.075, 2.5] },
+];
+const DEFAULT_PRICE = [0.3, 0.075, 2.5];
+
+function priceFor(name) {
+  const s = String(name || '');
+  for (const p of PRICING) if (p.re.test(s)) return p.price;
+  return DEFAULT_PRICE;
+}
+
+function costOf(price, input, cacheRead, output) {
+  return (input * price[0] + cacheRead * price[1] + output * price[2]) / 1e6;
 }
 
 const TIER_SUFFIX_RE = /-(xhigh|high|medium|low|n|tiered|trial|exp-[a-z0-9]+)$/;
@@ -463,8 +489,9 @@ function parseTranscript(filePath, convId) {
     }
 
     if (hasTokens) {
-      addToBucket(dayBucket, input, cacheRead, output, true);
-      addToBucket(totals, input, cacheRead, output, true);
+      const stepCost = costOf(DEFAULT_PRICE, input, cacheRead, output);
+      addToBucket(dayBucket, input, cacheRead, output, true, stepCost);
+      addToBucket(totals, input, cacheRead, output, true, stepCost);
     }
 
     if (step.type === 'USER_INPUT') {
@@ -611,6 +638,7 @@ function buildSnapshot() {
       totals.output += tr.totals.output;
       totals.total += tr.totals.total;
       totals.net += tr.totals.net;
+      totals.cost += tr.totals.cost || 0;
       totals.steps += tr.totals.steps;
       totals.turns += tr.totals.turns;
 
@@ -627,6 +655,7 @@ function buildSnapshot() {
         output: tr.totals.output,
         total: tr.totals.total,
         net: tr.totals.net,
+        cost: tr.totals.cost || 0,
         steps: tr.totals.steps,
         turns: tr.totals.turns,
         activeMs: convActiveMs,
@@ -658,6 +687,7 @@ function buildSnapshot() {
       agg.output += b.output;
       agg.total += b.total;
       agg.net += b.net;
+      agg.cost += b.cost || 0;
       agg.steps += b.steps;
       agg.turns += b.turns;
       agg.activeMs += b.activeMs;
@@ -673,6 +703,7 @@ function buildSnapshot() {
           output: b.output,
           total: b.total,
           net: b.net,
+          cost: b.cost || 0,
           steps: b.steps,
           activeMs: b.activeMs,
         });
@@ -726,6 +757,12 @@ function buildSnapshot() {
     daily,
     byDayConversations: Object.fromEntries(byDayConvs.entries()),
     topConversations,
+    pricing: {
+      currency: 'USD',
+      cnyRate: 7.2,
+      rules: PRICING.map((p) => ({ family: p.family, price: p.price })),
+      default: DEFAULT_PRICE,
+    },
     models: {
       total: modelList(modelTotals, modelNames),
       byDay: Object.fromEntries(

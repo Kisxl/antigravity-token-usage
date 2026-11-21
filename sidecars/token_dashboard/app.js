@@ -11,6 +11,9 @@
       scopeToday: '今日新增',
       kpiTotalLbl: '累计 Token 数',
       kpiTodayLbl: '今日新增 Token',
+      kpiCostLbl: (cny) => `估算费用 · ≈${cny}`,
+      kpiTodayCostLbl: (cny) => `今日费用 · ≈${cny}`,
+      costTitle: '按各模型官网 API 公开单价估算（含缓存折扣），仅供参考',
       kpiPeakLbl: 'Token 使用峰值',
       kpiTodayPeakLbl: '今日会话峰值',
       kpiLongestLbl: '最长任务用时',
@@ -32,8 +35,8 @@
       daysUnit: (n) => `${n} 天`,
       daySummarySub: (n, tot) => `${n} 个会话 · 合计 ${tot}`,
       topSummarySub: (n, totalConvs) => `Top ${n} · 共 ${totalConvs} 个会话`,
-      convDayRight: (s, dur) => `${s} 步 · ${dur}`,
-      convTopRight: (s, d) => `${s} 步 · ${d || '—'}`,
+      convDayRight: (s, dur, cost) => `${s} 步 · ${dur} · ${cost}`,
+      convTopRight: (s, d, cost) => `${s} 步 · ${d || '—'} · ${cost}`,
       fmtDayDate: (dateKey) => {
         const [, m, d] = dateKey.split('-').map(Number);
         return `${m}月${d}日`;
@@ -46,14 +49,15 @@
         const [y, m, d] = dateKey.split('-').map(Number);
         return `累计至 ${y}年${m}月${d}日 起的一周`;
       },
-      fmtTokLine: (val) => `${fmtTokens(val)} 个 Token`,
+      fmtTokLine: (val, cost) =>
+        cost === undefined ? `${fmtTokens(val)} 个 Token` : `${fmtTokens(val)} 个 Token · ${fmtCost(cost)}`,
       modelsTitle: '模型分布',
       mscopeAll: '累计',
       mscopeDay: '所选日期',
       modelsSubAll: (n, tot) => `${n} 个模型 · 累计 ${tot}`,
       modelsSubDay: (d, n, tot) => `${d} · ${n} 个模型 · 合计 ${tot}`,
       noModelRecords: '暂无模型用量记录',
-      modelRight: (pct, s) => `${pct} · ${s} 步`,
+      modelRight: (cost, pct, s) => `${cost} · ${pct} · ${s} 步`,
       months: ['1月', '2月', '3月', '4月', '5月', '6月', '7月', '8月', '9月', '10月', '11月', '12月'],
     },
     en: {
@@ -64,6 +68,9 @@
       scopeToday: 'Today',
       kpiTotalLbl: 'Total Tokens',
       kpiTodayLbl: 'Tokens Today',
+      kpiCostLbl: () => 'Est. Cost',
+      kpiTodayCostLbl: () => 'Cost Today',
+      costTitle: 'Estimated from public API list prices (incl. cache discount); for reference only',
       kpiPeakLbl: 'Peak Daily Usage',
       kpiTodayPeakLbl: 'Top Session Today',
       kpiLongestLbl: 'Longest Task',
@@ -85,8 +92,8 @@
       daysUnit: (n) => `${n}d`,
       daySummarySub: (n, tot) => `${n} sessions · Total ${tot}`,
       topSummarySub: (n, totalConvs) => `Top ${n} · ${totalConvs} sessions`,
-      convDayRight: (s, dur) => `${s} steps · ${dur}`,
-      convTopRight: (s, d) => `${s} steps · ${d || '—'}`,
+      convDayRight: (s, dur, cost) => `${s} steps · ${dur} · ${cost}`,
+      convTopRight: (s, d, cost) => `${s} steps · ${d || '—'} · ${cost}`,
       fmtDayDate: (dateKey) => {
         const [y, m, d] = dateKey.split('-').map(Number);
         return `${I18N.en.months[m - 1]} ${d}, ${y}`;
@@ -99,14 +106,15 @@
         const [y, m, d] = dateKey.split('-').map(Number);
         return `Cumulative through week of ${I18N.en.months[m - 1]} ${d}, ${y}`;
       },
-      fmtTokLine: (val) => `${fmtTokens(val)} tokens`,
+      fmtTokLine: (val, cost) =>
+        cost === undefined ? `${fmtTokens(val)} tokens` : `${fmtTokens(val)} tokens · ${fmtCost(cost)}`,
       modelsTitle: 'Models',
       mscopeAll: 'All Time',
       mscopeDay: 'Selected Day',
       modelsSubAll: (n, tot) => `${n} models · Total ${tot}`,
       modelsSubDay: (d, n, tot) => `${d} · ${n} models · Total ${tot}`,
       noModelRecords: 'No model usage recorded',
-      modelRight: (pct, s) => `${pct} · ${s} steps`,
+      modelRight: (cost, pct, s) => `${cost} · ${pct} · ${s} steps`,
       months: ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'],
     },
   };
@@ -179,6 +187,18 @@
       return `${(v / 1e4).toFixed(1).replace(/\.0$/, '')}万`;
     }
     return v.toLocaleString('zh-CN');
+  }
+
+  function fmtCost(usd) {
+    const v = Number(usd) || 0;
+    if (v >= 1000) return `$${v.toLocaleString('en-US', { maximumFractionDigits: 0 })}`;
+    if (v >= 100) return `$${v.toFixed(0)}`;
+    return `$${v.toFixed(2)}`;
+  }
+
+  function fmtCny(usd) {
+    const rate = state.snap?.pricing?.cnyRate || 7.2;
+    return `¥${Math.round((Number(usd) || 0) * rate).toLocaleString('zh-CN')}`;
   }
 
   function fmtDuration(ms) {
@@ -275,9 +295,13 @@
     const todayConvs = snap.today.conversations || [];
 
     if (state.scope === 'today') {
+      const todayCost = snap.today.cost || 0;
       setKpi('total-lbl', tr.kpiTodayLbl);
       setKpi('total-val', fmtTokens(snap.today.total || 0));
       $('kpi-total').title = `${snap.todayKey}`;
+
+      setKpi('cost-val', fmtCost(todayCost));
+      setKpi('cost-lbl', tr.kpiTodayCostLbl(fmtCny(todayCost)));
 
       const topToday = todayConvs[0];
       setKpi('peak-lbl', tr.kpiTodayPeakLbl);
@@ -289,9 +313,13 @@
       setKpi('longest-val', fmtDuration(todayActiveMs));
       $('kpi-longest').title = snap.todayKey;
     } else {
+      const totalCost = snap.totals.cost || 0;
       setKpi('total-lbl', tr.kpiTotalLbl);
       setKpi('total-val', fmtTokens(snap.totals.total));
       $('kpi-total').title = '';
+
+      setKpi('cost-val', fmtCost(totalCost));
+      setKpi('cost-lbl', tr.kpiCostLbl(fmtCny(totalCost)));
 
       const peak = snap.peaks.dailyTotal;
       setKpi('peak-lbl', tr.kpiPeakLbl);
@@ -302,6 +330,8 @@
       setKpi('longest-val', fmtDuration(snap.longestTask.durationMs));
       $('kpi-longest').title = snap.longestTask.title ? `${snap.longestTask.title} (${snap.longestTask.date})` : '';
     }
+
+    $('kpi-cost').title = tr.costTitle;
 
     setKpi('max-streak-lbl', tr.kpiMaxStreakLbl);
     setKpi('max-streak-val', tr.daysUnit(st.longest));
@@ -328,16 +358,21 @@
     const weeks = [];
     const cursor = new Date(startDt);
     let runningCum = 0;
+    let runningCumCost = 0;
 
     // Account for any tokens earlier than the 53-week window in cumulative baseline
     const startKey = toDateKey(startDt);
     for (const d of snap.daily) {
-      if (d.date < startKey) runningCum += d.total || 0;
+      if (d.date < startKey) {
+        runningCum += d.total || 0;
+        runningCumCost += d.cost || 0;
+      }
     }
 
     for (let w = 0; w < 53; w++) {
       const days = [];
       let weekTotal = 0;
+      let weekCost = 0;
       let colMonth = -1;
       for (let dow = 0; dow < 7; dow++) {
         const dt = new Date(cursor);
@@ -348,17 +383,22 @@
         }
         const rec = dailyByDate.get(key);
         const val = !isFuture && rec ? rec.total || 0 : 0;
+        const cost = !isFuture && rec ? rec.cost || 0 : 0;
         weekTotal += val;
-        days.push({ key, val, isFuture });
+        weekCost += cost;
+        days.push({ key, val, cost, isFuture });
         cursor.setDate(cursor.getDate() + 1);
       }
       runningCum += weekTotal;
+      runningCumCost += weekCost;
       weeks.push({
         weekIdx: w,
         startKey: days[0].key,
         days,
         weekTotal,
+        weekCost,
         cumTotal: runningCum,
+        cumCost: runningCumCost,
         colMonth,
       });
     }
@@ -396,7 +436,7 @@
           const fut = day.isFuture ? ' future' : '';
           cells.push(
             `<button type="button" class="cell lv-${lv}${fut}${sel}" ` +
-            `${day.isFuture ? 'disabled aria-hidden="true"' : `data-date="${day.key}" data-val="${day.val}"`}></button>`
+            `${day.isFuture ? 'disabled aria-hidden="true"' : `data-date="${day.key}" data-val="${day.val}" data-cost="${day.cost}"`}></button>`
           );
         }
       } else {
@@ -411,6 +451,7 @@
         state.colMeta[wk.weekIdx] = {
           startKey: wk.startKey,
           val: metric,
+          cost: isWeekly ? wk.weekCost : wk.cumCost,
         };
 
         for (let dow = 0; dow < 7; dow++) {
@@ -453,7 +494,7 @@
         return;
       }
       listEl.innerHTML = items
-        .map((c) => renderConvRow(c, canJump, tr.convDayRight(c.steps, fmtDuration(c.activeMs))))
+        .map((c) => renderConvRow(c, canJump, tr.convDayRight(c.steps, fmtDuration(c.activeMs), fmtCost(c.cost))))
         .join('');
     } else {
       const items = snap.topConversations || [];
@@ -465,7 +506,7 @@
         return;
       }
       listEl.innerHTML = items
-        .map((c) => renderConvRow(c, canJump, tr.convTopRight(c.steps, c.lastDate)))
+        .map((c) => renderConvRow(c, canJump, tr.convTopRight(c.steps, c.lastDate, fmtCost(c.cost))))
         .join('');
     }
   }
@@ -517,7 +558,7 @@
               <span class="detail-title">${esc(m.name)}</span>
               <span class="detail-metrics">
                 <span class="detail-tok">${esc(fmtTokens(m.total))}</span>
-                <span class="detail-sub"> · ${esc(tr.modelRight(pct, m.steps))}</span>
+                <span class="detail-sub"> · ${esc(tr.modelRight(fmtCost(m.cost), pct, m.steps))}</span>
               </span>
             </div>
             <div class="model-bar"><span style="width:${width}%"></span></div>
@@ -629,11 +670,12 @@
 
     if (cell.dataset.date) {
       const val = Number(cell.dataset.val) || 0;
+      const cost = Number(cell.dataset.cost) || 0;
       showTooltip(
         e.clientX,
         e.clientY,
         `<div class="tt-title">${esc(tr.fmtDayDate(cell.dataset.date))}</div>
-         <div class="tt-val">${esc(tr.fmtTokLine(val))}</div>`
+         <div class="tt-val">${esc(tr.fmtTokLine(val, cost))}</div>`
       );
     } else if (cell.dataset.col !== undefined) {
       const col = Number(cell.dataset.col);
@@ -645,7 +687,7 @@
         e.clientX,
         e.clientY,
         `<div class="tt-title">${esc(heading)}</div>
-         <div class="tt-val">${esc(tr.fmtTokLine(meta.val))}</div>`
+         <div class="tt-val">${esc(tr.fmtTokLine(meta.val, meta.cost || 0))}</div>`
       );
     }
   });

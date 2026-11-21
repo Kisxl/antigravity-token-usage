@@ -137,10 +137,10 @@ button { font: inherit; color: inherit; cursor: pointer; background: none; borde
 .icon-btn.spinning svg { animation: spin 0.7s linear infinite; }
 @keyframes spin { to { transform: rotate(360deg); } }
 
-/* Top 5-KPI Codex pill card */
+/* Top 6-KPI Codex pill card */
 .kpi-strip {
   display: grid;
-  grid-template-columns: repeat(5, minmax(0, 1fr));
+  grid-template-columns: repeat(6, minmax(0, 1fr));
   background: transparent;
   border: 1px solid var(--tk-border);
   border-radius: 999px;
@@ -427,6 +427,5 @@ button { font: inherit; color: inherit; cursor: pointer; background: none; borde
     padding: 10px 8px;
   }
   .kpi-item + .kpi-item::before { display: none; }
-  .kpi-item:first-child { grid-column: span 2; }
   .kpi-value { font-size: 16px; }
 }
